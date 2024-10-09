@@ -1,0 +1,28 @@
+{
+    "autoscale": {
+        "min_workers": 2,
+        "max_workers": 8
+    },
+    "cluster_name": "dinesh kumar's Cluster (clone)",
+    "spark_version": "15.4.x-cpu-ml-scala2.12",
+    "spark_conf": {},
+    "gcp_attributes": {
+        "use_preemptible_executors": false,
+        "availability": "ON_DEMAND_GCP",
+        "zone_id": "auto"
+    },
+    "node_type_id": "n2-highmem-4",
+    "driver_node_type_id": "n2-highmem-4",
+    "ssh_public_keys": [],
+    "custom_tags": {},
+    "spark_env_vars": {},
+    "autotermination_minutes": 120,
+    "enable_elastic_disk": false,
+    "init_scripts": [],
+    "single_user_name": "dinesh.kumar.snowflake@gmail.com",
+    "enable_local_disk_encryption": false,
+    "data_security_mode": "SINGLE_USER",
+    "runtime_engine": "STANDARD",
+    "effective_spark_version": "15.4.x-cpu-ml-scala2.12",
+    "cluster_id": "0926-072733-46ayiwav"
+}
