@@ -1,0 +1,247 @@
+import streamlit as st
+import requests
+import json
+import time
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import ast
+import datetime
+import random
+
+
+DATABRICKS_INSTANCE = ""
+DATABRICKS_TOKEN = ""
+
+def trigger_job(customer_name, question):
+    url = f"{DATABRICKS_INSTANCE}/api/2.0/jobs/run-now"
+    headers = {
+        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "job_id": "",  
+        "notebook_params": {
+            "customer_name": customer_name,
+            "question": question
+        }
+    }
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    
+    if response.status_code == 200:
+        return response.json() 
+    else:
+        st.error(f"Error triggering job: {response.text}")
+        return None
+
+def trigger_trade_in_job(trade_in_details):
+    url = f"{DATABRICKS_INSTANCE}/api/2.0/jobs/run-now"
+    headers = {
+        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "job_id": "",  
+        "notebook_params": {
+            "trade_in_details": trade_in_details
+        }
+    }
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        st.error(f"Error triggering trade-in job: {response.text}")
+        return None
+
+def get_job_output(run_id):
+    url = f"{DATABRICKS_INSTANCE}/api/2.0/jobs/runs/get-output"
+    headers = {
+        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    params = {"run_id": run_id}
+    response = requests.get(url, headers=headers, params=params)
+    
+    if response.status_code == 200:
+        return response.json() 
+    else:
+        st.error(f"Error fetching job output: {response.text}")
+        return None
+
+def generate_quote_pdf(car_details):
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    p.drawString(100, height - 40, "CAR QUOTE INVOICE")
+    p.drawString(100, height - 60, "-----------------------------------")
+    p.drawString(100, height - 80, f"Customer Name: {car_details['customer_name']}")
+    p.drawString(100, height - 100, f"Quote Date: {car_details['quote_date']}")
+
+    invoice_number = car_details.get('invoice_number', f"INV-{random.randint(1000, 9999)}")
+    p.drawString(100, height - 120, f"Invoice Number: {invoice_number}")
+    
+    p.drawString(100, height - 140, "-----------------------------------")
+    p.drawString(100, height - 160, "Car Details:")
+    p.drawString(100, height - 180, f"Brand: {car_details['brand']}")
+    p.drawString(100, height - 200, f"Model: {car_details['model']}")
+    p.drawString(100, height - 220, f"Year: {car_details['year']}")
+    p.drawString(100, height - 240, "-----------------------------------")
+
+    p.drawString(100, height - 280, "Pricing:")
+    p.drawString(100, height - 300, f"Base Price: {car_details['base_price']}")
+
+    base_price_value = float(car_details['base_price'].replace(',', ''))  
+    taxes = base_price_value * 0.18  
+    total_price = base_price_value + taxes
+
+    if 'trade_in_value' in car_details:
+        trade_in_value = float(car_details['trade_in_value'].replace(',', ''))
+        total_price -= trade_in_value
+        p.drawString(100, height - 320, f"Trade-in Value: -{trade_in_value:,.2f}")
+
+    p.drawString(100, height - 340, f"Taxes & Fees: {taxes:,.2f}")  
+    p.drawString(100, height - 360, f"Total Price: {total_price:,.2f}")  
+
+    p.drawString(100, height - 380, "-----------------------------------")
+    p.drawString(100, height - 400, "Thank you for choosing us for your car purchase.")
+    
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return buffer
+
+st.title("Car Quotation Generator")
+
+
+if "quote_generated" not in st.session_state:
+    st.session_state.quote_generated = False
+if "car_details" not in st.session_state:
+    st.session_state.car_details = {}
+if "trade_in_done" not in st.session_state:
+    st.session_state.trade_in_done = False
+if "show_trade_in" not in st.session_state:
+    st.session_state.show_trade_in = False
+
+
+customer_name = st.text_input("Enter your name", value="", key="customer_name_input")
+
+if customer_name:
+    question = st.text_input("Ask for a car quotation (e.g., 'What is the highest price of Honda Amaze 2015 model in New Delhi?')")
+
+    if st.button("Get Quote"):
+        if customer_name and question:
+            job_response = trigger_job(customer_name, question)
+            if job_response:
+                run_id = job_response["run_id"]
+
+                st.info("Take a moment to relax while we craft your car quotation.")
+                time.sleep(5)
+
+                timeout = 120
+                start_time = time.time()
+                
+                while True:
+                    if time.time() - start_time > timeout:
+                        st.error("Job took too long to complete.")
+                        break
+                    
+                    output_response = get_job_output(run_id)
+                    
+                    if output_response:
+                        current_state = output_response.get("metadata", {}).get("state", {}).get("life_cycle_state")
+                        if current_state == "TERMINATED":
+                            result_state = output_response.get("metadata", {}).get("state", {}).get("result_state")
+                            if result_state == "SUCCESS":
+                                result_str = output_response.get("notebook_output", {}).get("result", "")
+                                
+                                try:
+                                    car_details = ast.literal_eval(result_str)  
+                                except (ValueError, SyntaxError) as e:
+                                    st.error(f"Error converting result string to dictionary: {e}")
+                                    break
+                                
+                                if isinstance(car_details, dict):
+                                    st.success(f"Car Quote: {car_details}")
+
+                                   
+                                    st.session_state.car_details = car_details
+                                    base_price_value = float(car_details['base_price'].replace(',', '')) 
+                                    taxes = int(base_price_value * 0.18) 
+                                    total_price = base_price_value + taxes
+
+                                    car_details['taxes'] = f"{taxes:,}"  
+                                    car_details['total_price'] = f"{total_price:,}"
+                                    car_details['customer_name'] = customer_name  
+                                    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+                                    car_details['quote_date'] = current_date
+
+                                    st.session_state.quote_generated = True
+                                    break
+
+                    time.sleep(5)
+
+    if st.session_state.quote_generated:
+        st.success(f"Quote generated! Total Price: {st.session_state.car_details['total_price']}")
+        
+        # if st.button("Download Quote as PDF"):
+        #     buffer = generate_quote_pdf(st.session_state.car_details)
+        #     st.download_button("Download PDF", buffer, "car_quote.pdf", "application/pdf")
+
+        
+        if st.button("Trade-in Option"):
+            st.session_state.show_trade_in = not st.session_state.show_trade_in
+        
+        if st.session_state.show_trade_in:
+            st.subheader("Trade-in Details")
+            trade_in_brand = st.text_input("Brand", key="trade_in_brand")
+            trade_in_model = st.text_input("Model", key="trade_in_model")
+            trade_in_location = st.text_input("Location", key="trade_in_location")
+            trade_in_year = st.text_input("Year", key="trade_in_year")
+            trade_in_transmission = st.text_input("Transmission", key="trade_in_transmission")
+            trade_in_fuel = st.text_input("Fuel Type", key="trade_in_fuel")
+
+            if st.button("Submit Trade-in Details"):
+                trade_in_details = f"Brand: {trade_in_brand}, Model: {trade_in_model}, Location: {trade_in_location}, Year: {trade_in_year}, Transmission: {trade_in_transmission}, Fuel: {trade_in_fuel}"
+                
+                
+                trade_in_output = trigger_trade_in_job(trade_in_details)
+                
+                if trade_in_output:
+                    run_id = trade_in_output["run_id"]
+                    
+                    st.info("Processing trade-in details...")
+                    timeout = 120
+                    start_time = time.time()
+                    
+                    while True:
+                        if time.time() - start_time > timeout:
+                            st.error("Job took too long to complete.")
+                            break
+                        
+                        output_response = get_job_output(run_id)
+                        
+                        if output_response:
+                            current_state = output_response.get("metadata", {}).get("state", {}).get("life_cycle_state")
+                            if current_state == "TERMINATED":
+                                result_state = output_response.get("metadata", {}).get("state", {}).get("result_state")
+                                if result_state == "SUCCESS":
+                                    trade_in_value = output_response.get("notebook_output", {}).get("result", "0")
+                                    
+                                    
+                                    try:
+                                        trade_in_value = float(trade_in_value)
+                                        st.session_state.car_details['trade_in_value'] = trade_in_value
+                                        st.success(f"Trade-in Value: {trade_in_value:,.2f}")
+                                        st.session_state.trade_in_done = True
+                                    except ValueError as e:
+                                        st.error(f"Error converting trade-in value: {e}")
+                                else:
+                                    st.error(f"Job failed with state: {result_state}")
+                                break
+
+                        time.sleep(5)
+
+            if st.session_state.trade_in_done:
+                st.success("Trade-in process completed.")
