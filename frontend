@@ -10,8 +10,8 @@ import datetime
 import random
 
 
-DATABRICKS_INSTANCE = ""
-DATABRICKS_TOKEN = ""
+DATABRICKS_INSTANCE = "https://3246808948404749.9.gcp.databricks.com"
+DATABRICKS_TOKEN = "dapi950e435d6d381168501a0ca4c287243b"
 
 def trigger_job(customer_name, question):
     url = f"{DATABRICKS_INSTANCE}/api/2.0/jobs/run-now"
@@ -20,7 +20,7 @@ def trigger_job(customer_name, question):
         "Content-Type": "application/json"
     }
     data = {
-        "job_id": "",  
+        "job_id": "152359077228125",  
         "notebook_params": {
             "customer_name": customer_name,
             "question": question
@@ -41,7 +41,7 @@ def trigger_trade_in_job(trade_in_details):
         "Content-Type": "application/json"
     }
     data = {
-        "job_id": "",  
+        "job_id": "254468519176234",  
         "notebook_params": {
             "trade_in_details": trade_in_details
         }
@@ -97,7 +97,7 @@ def generate_quote_pdf(car_details):
     total_price = base_price_value + taxes
 
     if 'trade_in_value' in car_details:
-        trade_in_value = float(car_details['trade_in_value'].replace(',', ''))
+        trade_in_value = float(car_details['trade_in_value'])
         total_price -= trade_in_value
         p.drawString(100, height - 320, f"Trade-in Value: -{trade_in_value:,.2f}")
 
@@ -113,7 +113,6 @@ def generate_quote_pdf(car_details):
     return buffer
 
 st.title("Car Quotation Generator")
-
 
 if "quote_generated" not in st.session_state:
     st.session_state.quote_generated = False
@@ -165,7 +164,6 @@ if customer_name:
                                 if isinstance(car_details, dict):
                                     st.success(f"Car Quote: {car_details}")
 
-                                   
                                     st.session_state.car_details = car_details
                                     base_price_value = float(car_details['base_price'].replace(',', '')) 
                                     taxes = int(base_price_value * 0.18) 
@@ -185,10 +183,6 @@ if customer_name:
     if st.session_state.quote_generated:
         st.success(f"Quote generated! Total Price: {st.session_state.car_details['total_price']}")
         
-        # if st.button("Download Quote as PDF"):
-        #     buffer = generate_quote_pdf(st.session_state.car_details)
-        #     st.download_button("Download PDF", buffer, "car_quote.pdf", "application/pdf")
-
         
         if st.button("Trade-in Option"):
             st.session_state.show_trade_in = not st.session_state.show_trade_in
@@ -204,7 +198,6 @@ if customer_name:
 
             if st.button("Submit Trade-in Details"):
                 trade_in_details = f"Brand: {trade_in_brand}, Model: {trade_in_model}, Location: {trade_in_location}, Year: {trade_in_year}, Transmission: {trade_in_transmission}, Fuel: {trade_in_fuel}"
-                
                 
                 trade_in_output = trigger_trade_in_job(trade_in_details)
                 
@@ -229,12 +222,21 @@ if customer_name:
                                 if result_state == "SUCCESS":
                                     trade_in_value = output_response.get("notebook_output", {}).get("result", "0")
                                     
-                                    
                                     try:
                                         trade_in_value = float(trade_in_value)
                                         st.session_state.car_details['trade_in_value'] = trade_in_value
                                         st.success(f"Trade-in Value: {trade_in_value:,.2f}")
                                         st.session_state.trade_in_done = True
+
+                                        
+                                        base_price_value = float(st.session_state.car_details['base_price'].replace(',', ''))
+                                        taxes = base_price_value * 0.18
+                                        total_price = base_price_value + taxes
+                                        final_price = total_price - trade_in_value
+                                        
+                                       
+                                        st.session_state.car_details['final_price'] = final_price
+
                                     except ValueError as e:
                                         st.error(f"Error converting trade-in value: {e}")
                                 else:
@@ -245,3 +247,13 @@ if customer_name:
 
             if st.session_state.trade_in_done:
                 st.success("Trade-in process completed.")
+
+            
+
+        
+        if 'final_price' in st.session_state.car_details:
+            st.success(f"Final Price after Trade-in: {st.session_state.car_details['final_price']:,.2f}")
+
+        if st.button("Download Quote as PDF"):
+            buffer = generate_quote_pdf(st.session_state.car_details)
+            st.download_button("Download PDF", buffer, "car_quote.pdf", "application/pdf")
