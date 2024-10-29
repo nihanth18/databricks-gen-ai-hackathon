@@ -10,8 +10,8 @@ import datetime
 import random
 
 
-DATABRICKS_INSTANCE = "https://3246808948404749.9.gcp.databricks.com"
-DATABRICKS_TOKEN = "dapi950e435d6d381168501a0ca4c287243b"
+DATABRICKS_INSTANCE = ""
+DATABRICKS_TOKEN = ""
 
 def trigger_job(customer_name, question):
     url = f"{DATABRICKS_INSTANCE}/api/2.0/jobs/run-now"
@@ -20,7 +20,7 @@ def trigger_job(customer_name, question):
         "Content-Type": "application/json"
     }
     data = {
-        "job_id": "152359077228125",  
+        "job_id": "",  
         "notebook_params": {
             "customer_name": customer_name,
             "question": question
@@ -41,7 +41,7 @@ def trigger_trade_in_job(trade_in_details):
         "Content-Type": "application/json"
     }
     data = {
-        "job_id": "254468519176234",  
+        "job_id": "",  
         "notebook_params": {
             "trade_in_details": trade_in_details
         }
